@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 128 128">
+  <title>Typeless Switch — Echo Switch</title>
+  <desc>Two opposing charcoal arcs on a pearl-white glass tile, inspired by voice and account switching.</desc>
+  <defs>
+    <linearGradient id="pearl" x1="0" y1="0" x2=".8" y2="1">
+      <stop stop-color="#fff"/><stop offset=".6" stop-color="#fcfdfe"/>
+      <stop offset="1" stop-color="#e6f2fa"/>
+    </linearGradient>
+    <linearGradient id="rim" x1=".1" y1="0" x2=".8" y2="1">
+      <stop stop-color="#fff"/><stop offset=".45" stop-color="#d3eafa"/>
+      <stop offset=".7" stop-color="#fff"/><stop offset="1" stop-color="#a6cbe9"/>
+    </linearGradient>
+    <linearGradient id="charcoal" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#303132"/><stop offset=".48" stop-color="#191a1c"/>
+      <stop offset="1" stop-color="#242628"/>
+    </linearGradient>
+    <filter id="raised" x="-15%" y="-15%" width="130%" height="135%">
+      <feDropShadow dx="0" dy=".7" stdDeviation=".7" flood-color="#1b2530" flood-opacity=".13"/>
+    </filter>
+    <path id="arc" d="M36 42C57 36 81 48 82 70C82 74 82 76 85 73C89 69 93 66 99 63C102 62 102 59 101 55C97 31 78 21 60 24C48 25 38 30 33 36C30 40 31 44 36 42Z"/>
+  </defs>
+  <rect x="8" y="8" width="112" height="112" rx="30" fill="url(#pearl)" stroke="url(#rim)" stroke-width="1.4"/>
+  <rect x="10" y="10" width="108" height="108" rx="28" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="1"/>
+  <g fill="url(#charcoal)" stroke="#17191b" stroke-width=".6" stroke-linejoin="round" filter="url(#raised)">
+    <use href="#arc"/>
+    <use href="#arc" transform="rotate(180 64 64)"/>
+  </g>
+</svg>

@@ -1,0 +1,28 @@
+node_modules/
+dist/
+target/
+src-tauri/target/
+.DS_Store
+*.log
+.env*
+!.env.example
+artifacts/
+src-tauri/gen/
+
+.work/
+releases/
+
+# Local working notes and research are not part of the public source release.
+/design-qa.md
+/项目目录.md
+/research/
+
+# Never publish local account stores, session files or signing credentials.
+vault.bin
+toolkit.bin
+user-data.json
+app-storage.json
+*.p12
+*.pfx
+*.pem
+*.key

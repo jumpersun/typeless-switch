@@ -1,0 +1,11 @@
+{
+  "identifier": "main-events",
+  "description": "Listen for account operation notifications.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}
