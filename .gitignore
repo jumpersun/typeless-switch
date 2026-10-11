@@ -10,7 +10,7 @@ artifacts/
 src-tauri/gen/
 
 .work/
-releases/
+/releases/
 
 # Local working notes and research are not part of the public source release.
 /design-qa.md

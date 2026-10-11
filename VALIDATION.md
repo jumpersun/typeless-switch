@@ -17,7 +17,7 @@
 
 ## 构建产物
 
-本机已验证构建 `20261011-131258` 的 macOS Apple Silicon ZIP，大小 3,187,948 字节。安装包和本机校验明细不纳入源码提交，构建方法见 [README](README.md#开发)。
+本机已验证构建 `20261011-131258` 的 macOS Apple Silicon ZIP，大小 3,187,948 字节。安装包通过 [GitHub Releases](https://github.com/jumpersun/typeless-switch/releases/tag/v0.1.0) 分发，不纳入源码提交；构建方法见 [README](README.md#开发)。
 
 SHA-256：`1e70d4e77d994c15eb856248a8e1e228670672135274b6a32de83afebfa37ca4`。
 

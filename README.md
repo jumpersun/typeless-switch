@@ -1,16 +1,23 @@
 # Typeless Switch
 
-一个简单、免费的 Typeless 本机账号切换工具，采用 MIT 许可证。基于 Tauri 2、Rust 和 React，包含 macOS 与 Windows 适配；目前已验证 macOS Apple Silicon 构建，Windows 尚待实机测试。
+一个免费、开源的 Typeless 桌面账号切换工具。把已登录的账号加密保存在本机，需要时一键切换。
 
 保存当前账号 → 添加另一个账号 → 一键切换。
 
-采用普通桌面窗口，打开应用即可管理账号；显示在 macOS Dock / Windows 任务栏，关闭窗口退出。保留中文 / English 和浅色 / 深色 / 跟随系统设置。
+- **本地保存**：macOS 使用系统钥匙串保护加密密钥，Windows 使用当前用户的 DPAPI。
+- **账号管理**：保存、添加、切换、更新登录状态和移除；异常中断时可恢复原账号。
+- **简洁界面**：普通桌面窗口、字母头像，支持中文 / English 和浅色 / 深色 / 跟随系统。
+- **开源透明**：基于 Tauri 2、Rust 和 React，采用 MIT 许可证，无自建服务器和遥测。
 
-界面采用浅灰侧栏、白色内容区与蓝色操作按钮。应用标志沿用原始矢量图，移除小尺寸下的玻璃高光与立体变换；账号头像显示邮箱首字母。
+## 下载安装
 
-当前源码已移除词库、同步、邮箱别名和菜单栏 / 托盘功能，只管理已有账号。旧的词库数据文件不再读取，不影响切号；已有账号库继续使用。
+**[下载 macOS Apple Silicon 安装包](https://github.com/jumpersun/typeless-switch/releases/download/v0.1.0/Typeless-Switch-0.1.0-20261011-131258-macOS-AppleSilicon.zip)** · [发布说明与校验文件](https://github.com/jumpersun/typeless-switch/releases/tag/v0.1.0)
 
-当前为早期版本，真实双账号切换及最新界面的完整验收仍待完成。已通过的检查和适用边界见 [VALIDATION.md](VALIDATION.md)。
+适用于 M 系列 Mac。退出旧版，解压 ZIP，将 `Typeless Switch.app` 拖入「应用程序」即可；升级时保留原账号库。
+
+当前为 **v0.1.0 预发布版**，使用 ad-hoc 签名，未经 Apple 公证。完整原生界面和真实双账号切换验收仍待完成；已通过的检查见 [VALIDATION.md](VALIDATION.md)。Windows 适配代码已包含，尚未提供经过验证的 Windows 安装包。
+
+工具只管理已有账号，不包含词库同步、邮箱工具或菜单栏 / 托盘模式。
 
 ## 使用
 
