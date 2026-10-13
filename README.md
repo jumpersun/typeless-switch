@@ -5,28 +5,44 @@
 保存当前账号 → 添加另一个账号 → 一键切换。
 
 - **本地保存**：macOS 使用系统钥匙串保护加密密钥，Windows 使用当前用户的 DPAPI。
-- **账号管理**：保存、添加、切换、更新登录状态和移除；异常中断时可恢复原账号。
-- **简洁界面**：普通桌面窗口、字母头像，支持中文 / English 和浅色 / 深色 / 跟随系统。
+- **账号管理**：「所有账号」集中展示全部已保存账号，标明当前账号；支持保存、添加、切换、更新会话和移除保存记录。
+- **失败恢复**：退出与启动命令限时等待；切换失败尝试恢复原账号，未完成恢复时保留备份。
+- **简洁界面**：普通桌面窗口、人物导航图标、字母头像，支持中文 / English 和浅色 / 深色 / 跟随系统。
 - **开源透明**：基于 Tauri 2、Rust 和 React，采用 MIT 许可证，无自建服务器和遥测。
 
 ## 下载安装
 
-**[下载 macOS Apple Silicon 安装包](https://github.com/jumpersun/typeless-switch/releases/download/v0.1.0/Typeless-Switch-0.1.0-20261011-131258-macOS-AppleSilicon.zip)** · [发布说明与校验文件](https://github.com/jumpersun/typeless-switch/releases/tag/v0.1.0)
+**[下载 macOS Apple Silicon 安装包](https://github.com/jumpersun/typeless-switch/releases/download/v0.1.0-preview.20261013.132853/Typeless-Switch-0.1.0-20261013-132853-macOS-AppleSilicon.zip)** · [发布说明与校验文件](https://github.com/jumpersun/typeless-switch/releases/tag/v0.1.0-preview.20261013.132853) · [历史版本](https://github.com/jumpersun/typeless-switch/releases)
 
 适用于 M 系列 Mac。退出旧版，解压 ZIP，将 `Typeless Switch.app` 拖入「应用程序」即可；升级时保留原账号库。
 
-当前为 **v0.1.0 预发布版**，使用 ad-hoc 签名，未经 Apple 公证。完整原生界面和真实双账号切换验收仍待完成；已通过的检查见 [VALIDATION.md](VALIDATION.md)。Windows 适配代码已包含，尚未提供经过验证的 Windows 安装包。
+当前为 **v0.1.0 预发布版，构建 20261013-132853**。使用 ad-hoc 签名，未经 Apple 公证。完整原生界面和真实双账号切换验收仍待完成；已通过的检查见 [VALIDATION.md](VALIDATION.md)。Windows 适配代码已包含，尚未提供经过验证的 Windows 安装包。
 
 工具只管理已有账号，不包含词库同步、邮箱工具或菜单栏 / 托盘模式。
+
+## 本次更新
+
+- 侧栏账号入口改用人物图标；「其他账号」改为「所有账号」，当前账号也保留在列表中。
+- 当前项显示「当前账号」标记，避免重复切换。
+- 当前账号可移除保存记录，不退出 Typeless；之后可以再次保存。
+- 登录状态提示改为「检测到本地会话」，并完善辅助命令超时处理和失败恢复。
+
+详细变化及安装包 SHA-256 见 [本次发布说明](docs/releases/v0.1.0-preview.20261013.132853.md)。
 
 ## 使用
 
 1. 安装并登录官方 Typeless 客户端。
 2. 打开 Typeless Switch，点击「保存当前账号」。
 3. 点击「添加账号」，阅读三步引导，结束录音后点击「打开 Typeless」。使用已有邮箱在官方窗口注册或登录，按提示验证，再回到工具点击「我已登录，检测并保存」。检测针对本地登录文件，不代表服务端认证验收。
-4. 在列表中点击「切换」。如果登录状态过期，通过「添加账号」重新登录同一账号即可更新。
+4. 在「所有账号」列表中选择另一个账号，点击「切换」。当前账号始终显示在已保存账号列表中，并带有「当前账号」标记。
+
+本地会话变化后，点击「更新保存的会话」保存最新状态；如果登录状态过期，通过「添加账号」重新登录同一账号即可更新。尚未保存的当前账号需先点击「保存当前账号」才会进入列表。
+
+当前账号卡片中的「移除保存记录」只删除工具保存的会话，不会退出 Typeless 当前账号；之后可以再次保存。
 
 切换会重启 Typeless。macOS 首次切换可能请求控制 Typeless 的自动化权限，用于正常退出客户端。Windows 托盘程序若未响应退出请求，请从托盘手动退出后再试。
+
+退出和启动辅助命令会限时等待。修改登录文件后出现超时或其他失败时，工具会尝试恢复原账号；恢复未完成则保留备份，并暂停其他账号操作，直到完成恢复。
 
 ## 本地数据
 
@@ -38,7 +54,7 @@
 - 修改前先将原文件备份到加密账号库；中断时显示「恢复原账号」。不要在恢复完成前删除账号库。
 - 账号库绑定本机系统用户，不适合作为跨设备同步文件。
 
-「已登录」表示两个本地登录文件的身份一致，不代表服务器已接受令牌。切换后请在 Typeless 中确认账号并试用语音输入。
+「检测到本地会话」表示两个本地登录文件的身份一致，不代表服务器已接受令牌。切换后请在 Typeless 中确认账号并试用语音输入。
 
 ## 开发
 
@@ -96,7 +112,7 @@ macOS 也可运行 `bash scripts/package-macos.sh`，安装包统一放入 `rele
 - `src-tauri/src/engine.rs`：账号操作、事务日志、失败恢复。
 - `files.rs` / `codec.rs`：文件边界与会话格式兼容。
 - `vault.rs`：系统加密存储。
-- `platform.rs`：客户端发现、退出、启动。
+- `platform.rs` / `command.rs`：客户端发现、退出、启动，以及辅助命令超时和回收。
 - `src-tauri/tests/switch_safety.rs`：独立临时目录中的核心安全测试。
 
 参见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) 与 [LICENSE](LICENSE)。

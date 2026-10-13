@@ -1,4 +1,5 @@
 use crate::{
+    command::{self, CommandError},
     engine::{Client, Engine},
     files::{Captured, SessionFiles},
     vault::{SystemProtector, Vault},
@@ -12,10 +13,32 @@ use std::{
 };
 use sysinfo::System;
 
+const QUIT_TIMEOUT: Duration = Duration::from_secs(12);
+#[cfg(target_os = "macos")]
+const START_TIMEOUT: Duration = Duration::from_secs(12);
+const QUIT_TIMED_OUT: &str = "请求 Typeless 退出超时，请结束录音并手动退出 Typeless 后重试。";
+
+const HELPER_PENDING: &str = "系统命令尚未结束，请稍后重试。";
+
 pub struct NativeClient {
     executable: PathBuf,
+    helpers: command::Runner,
 }
 impl NativeClient {
+    fn run_helper(
+        &self,
+        command: &mut Command,
+        deadline: Instant,
+        failure: &str,
+        timeout: &str,
+    ) -> Result<()> {
+        self.helpers.run(command, deadline).map_err(|error| match error {
+            CommandError::TimedOut => timeout.into(),
+            CommandError::Failed => failure.into(),
+            CommandError::CleanupFailed => HELPER_PENDING.into(),
+        })
+    }
+
     fn processes(&self) -> Vec<sysinfo::Pid> {
         let system = System::new_all();
         system
@@ -48,41 +71,47 @@ impl Client for NativeClient {
         !self.processes().is_empty()
     }
     fn stop(&self) -> Result<()> {
+        // A late launch/quit helper must finish before Engine can restore any files.
+        self.helpers.ensure_idle().map_err(|_| HELPER_PENDING)?;
         if !self.running() {
             return Ok(());
         }
+        let deadline = Instant::now() + QUIT_TIMEOUT;
         #[cfg(target_os = "macos")]
         {
             // Ask the official app to quit; never force-kill an active recording.
-            let status = Command::new("/usr/bin/osascript")
-                .args(["-e", "tell application id \"now.typeless.desktop\" to quit"])
-                .status()
-                .map_err(|_| "无法请求 Typeless 退出。")?;
-            if !status.success() {
-                return Err("请结束录音并手动退出 Typeless，然后重试。".into());
-            }
+            self.run_helper(
+                Command::new("/usr/bin/osascript")
+                    .args(["-e", "tell application id \"now.typeless.desktop\" to quit"]),
+                deadline,
+                "请结束录音并手动退出 Typeless，然后重试。",
+                QUIT_TIMED_OUT,
+            )?;
         }
         #[cfg(target_os = "windows")]
         for pid in self.processes() {
             use std::os::windows::process::CommandExt;
             // Only a numeric PID is interpolated. CloseMainWindow sends WM_CLOSE, never terminates.
             let script = format!("$p=Get-Process -Id {} -ErrorAction SilentlyContinue; if($p){{$null=$p.CloseMainWindow()}}", pid.as_u32());
-            Command::new("powershell.exe")
-                .creation_flags(0x08000000) // CREATE_NO_WINDOW
-                .args(["-NoProfile", "-NonInteractive", "-Command", &script])
-                .status()
-                .map_err(|_| "请手动退出 Typeless 后重试。")?;
+            self.run_helper(
+                Command::new("powershell.exe")
+                    .creation_flags(0x08000000) // CREATE_NO_WINDOW
+                    .args(["-NoProfile", "-NonInteractive", "-Command", &script]),
+                deadline,
+                "请手动退出 Typeless 后重试。",
+                QUIT_TIMED_OUT,
+            )?;
         }
-        let deadline = Instant::now() + Duration::from_secs(12);
         while self.running() {
             if Instant::now() >= deadline {
-                return Err("Typeless 尚未退出，请结束录音并从托盘退出后重试。".into());
+                return Err(QUIT_TIMED_OUT.into());
             }
             thread::sleep(Duration::from_millis(250));
         }
         Ok(())
     }
     fn start(&self) -> Result<()> {
+        self.helpers.ensure_idle().map_err(|_| HELPER_PENDING)?;
         #[cfg(target_os = "macos")]
         {
             let app = self
@@ -91,13 +120,12 @@ impl Client for NativeClient {
                 .and_then(|p| p.parent())
                 .and_then(|p| p.parent())
                 .ok_or("无效的客户端路径")?;
-            let status = Command::new("/usr/bin/open")
-                .arg(app)
-                .status()
-                .map_err(|_| "无法启动 Typeless。")?;
-            if !status.success() {
-                return Err("无法启动 Typeless。".into());
-            }
+            self.run_helper(
+                Command::new("/usr/bin/open").arg(app),
+                Instant::now() + START_TIMEOUT,
+                "无法启动 Typeless。",
+                "启动 Typeless 超时，请确认客户端状态后重试。",
+            )?;
         }
         #[cfg(target_os = "windows")]
         {
@@ -120,7 +148,7 @@ impl Client for NativeClient {
             }
             thread::sleep(Duration::from_millis(500));
         }
-        Err("Typeless 未确认目标账号，可能需要重新登录。".into())
+        Err("等待 Typeless 更新本地账号文件超时，可能需要重新登录。".into())
     }
 }
 pub fn engine() -> Result<Engine> {
@@ -188,6 +216,9 @@ pub fn engine() -> Result<Engine> {
             root,
             protector: Box::new(SystemProtector),
         },
-        client: Box::new(NativeClient { executable }),
+        client: Box::new(NativeClient {
+            executable,
+            helpers: command::Runner::default(),
+        }),
     })
 }

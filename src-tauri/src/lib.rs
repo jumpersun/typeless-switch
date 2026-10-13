@@ -1,4 +1,5 @@
 pub mod codec;
+mod command;
 #[cfg(feature = "desktop")]
 pub mod desktop;
 pub mod engine;

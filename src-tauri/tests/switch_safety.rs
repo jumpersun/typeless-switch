@@ -26,8 +26,11 @@ impl Protector for TestProtection {
 #[derive(Default)]
 struct Control {
     starts_fail: AtomicUsize,
+    start_timeout_after_launch: AtomicBool,
     running: AtomicBool,
     stop_fail: AtomicBool,
+    stop_attempts: AtomicUsize,
+    stop_fail_at: AtomicUsize,
     confirm_fail: AtomicBool,
 }
 struct FakeClient {
@@ -42,8 +45,11 @@ impl Client for FakeClient {
         self.control.running.load(Ordering::SeqCst)
     }
     fn stop(&self) -> Result<()> {
-        if self.control.stop_fail.load(Ordering::SeqCst) {
-            return Err("stop failed".into());
+        let attempt = self.control.stop_attempts.fetch_add(1, Ordering::SeqCst) + 1;
+        if self.control.stop_fail.load(Ordering::SeqCst)
+            || self.control.stop_fail_at.load(Ordering::SeqCst) == attempt
+        {
+            return Err("quit request timed out".into());
         }
         self.control.running.store(false, Ordering::SeqCst);
         Ok(())
@@ -69,11 +75,19 @@ impl Client for FakeClient {
                 &serde_json::to_vec(&cache).unwrap(),
             )?;
         }
+        // A launch helper can time out after the official client already started.
+        if self
+            .control
+            .start_timeout_after_launch
+            .swap(false, Ordering::SeqCst)
+        {
+            return Err("launch request timed out".into());
+        }
         Ok(())
     }
     fn wait_for_account(&self, files: &SessionFiles, id: &str) -> Result<Captured> {
         if self.control.confirm_fail.load(Ordering::SeqCst) {
-            return Err("confirmation failed".into());
+            return Err("account confirmation timed out".into());
         }
         let captured = files.capture()?;
         if captured.identity.user_id != id {
@@ -207,6 +221,28 @@ fn startup_failure_rolls_back() {
     rig.check_alice();
     assert!(rig.engine.view().unwrap().pending.is_none());
 }
+#[test]
+fn launch_timeout_stops_started_target_before_restoring_original() {
+    let rig = Rig::new();
+    rig.two_accounts();
+    let before = rig.engine.files.snapshot().unwrap();
+    rig.control
+        .start_timeout_after_launch
+        .store(true, Ordering::SeqCst);
+
+    let error = rig.switch_bob().unwrap_err_string();
+
+    assert!(error.contains("launch request timed out"));
+    assert!(error.contains("已恢复"));
+    assert_eq!(rig.control.stop_attempts.load(Ordering::SeqCst), 2);
+    assert!(rig.control.running.load(Ordering::SeqCst));
+    let after = rig.engine.files.snapshot().unwrap();
+    assert_eq!(after.session, before.session);
+    assert_eq!(after.storage, before.storage);
+    let persisted: Store = rig.engine.vault.load().unwrap();
+    assert!(persisted.pending.is_none());
+    rig.check_alice();
+}
 trait ErrorText {
     fn unwrap_err_string(self) -> String;
 }
@@ -222,9 +258,76 @@ impl ErrorText for Result<typeless_switch::engine::View> {
 fn failed_confirmation_rolls_back() {
     let rig = Rig::new();
     rig.two_accounts();
+    let before = rig.engine.files.snapshot().unwrap();
     rig.control.confirm_fail.store(true, Ordering::SeqCst);
-    assert!(rig.switch_bob().is_err());
+    let error = rig.switch_bob().unwrap_err_string();
+    assert!(error.contains("account confirmation timed out"));
+    assert!(error.contains("已恢复"));
+    let after = rig.engine.files.snapshot().unwrap();
+    assert_eq!(after.session, before.session);
+    assert_eq!(after.storage, before.storage);
+    let persisted: Store = rig.engine.vault.load().unwrap();
+    assert!(persisted.pending.is_none());
+    assert_eq!(persisted.accounts.len(), 2);
     rig.check_alice();
+}
+#[test]
+fn rollback_quit_timeout_retains_journal_until_explicit_recovery() {
+    let rig = Rig::new();
+    rig.two_accounts();
+    let original = rig.engine.files.snapshot().unwrap();
+    rig.control.confirm_fail.store(true, Ordering::SeqCst);
+    rig.control.stop_fail_at.store(2, Ordering::SeqCst);
+
+    let error = rig.switch_bob().unwrap_err_string();
+
+    assert!(error.contains("备份已保留"));
+    assert!(!error.contains("已恢复切换前"));
+    assert!(rig.control.running.load(Ordering::SeqCst));
+    assert_eq!(rig.engine.files.capture().unwrap().identity.user_id, "bob");
+    let persisted: Store = rig.engine.vault.load().unwrap();
+    let pending = persisted.pending.unwrap();
+    assert_eq!(pending.kind, "switch");
+    assert_eq!(pending.backup.session, original.session);
+    assert_eq!(pending.backup.storage, original.storage);
+    let failed_state = rig.engine.files.snapshot().unwrap();
+    for (action, id) in [
+        ("save", None),
+        ("add", None),
+        ("switch", Some(codec::account_id("alice"))),
+        ("remove", Some(codec::account_id("alice"))),
+    ] {
+        assert!(rig.engine.execute(action, id.as_deref()).is_err());
+    }
+    let unchanged = rig.engine.files.snapshot().unwrap();
+    assert_eq!(unchanged.session, failed_state.session);
+    assert_eq!(unchanged.storage, failed_state.storage);
+
+    rig.engine.execute("restore", None).unwrap();
+
+    rig.check_alice();
+    assert!(rig.control.running.load(Ordering::SeqCst));
+    let after = rig.engine.files.snapshot().unwrap();
+    assert_eq!(after.session, original.session);
+    assert_eq!(after.storage, original.storage);
+    let persisted: Store = rig.engine.vault.load().unwrap();
+    assert!(persisted.pending.is_none());
+}
+#[test]
+fn confirmation_timeout_restores_without_starting_previously_closed_client() {
+    let rig = Rig::new();
+    rig.two_accounts();
+    let before = rig.engine.files.snapshot().unwrap();
+    rig.control.running.store(false, Ordering::SeqCst);
+    rig.control.confirm_fail.store(true, Ordering::SeqCst);
+
+    assert!(rig.switch_bob().unwrap_err_string().contains("已恢复"));
+
+    assert!(!rig.control.running.load(Ordering::SeqCst));
+    let after = rig.engine.files.snapshot().unwrap();
+    assert_eq!(after.session, before.session);
+    assert_eq!(after.storage, before.storage);
+    assert!(rig.engine.view().unwrap().pending.is_none());
 }
 #[test]
 fn failed_rollback_keeps_journal_and_blocks_mutations() {
@@ -267,6 +370,32 @@ fn add_uses_official_login_then_deduplicates() {
     assert_eq!(view.accounts.len(), 2);
     assert!(view.pending.is_none());
     assert_eq!(rig.engine.execute("save", None).unwrap().accounts.len(), 2);
+}
+#[test]
+fn removing_current_saved_account_keeps_client_login_and_can_be_saved_again() {
+    let rig = Rig::new();
+    rig.engine.execute("save", None).unwrap();
+    let before = rig.engine.files.snapshot().unwrap();
+    let id = codec::account_id("alice");
+
+    let view = rig.engine.execute("remove", Some(&id)).unwrap();
+
+    assert!(view.accounts.is_empty());
+    assert_eq!(view.current.unwrap().id, id);
+    assert!(view.pending.is_none());
+    assert!(rig.control.running.load(Ordering::SeqCst));
+    assert_eq!(rig.control.stop_attempts.load(Ordering::SeqCst), 0);
+    let after = rig.engine.files.snapshot().unwrap();
+    assert_eq!(after.session, before.session);
+    assert_eq!(after.storage, before.storage);
+    let persisted: Store = rig.engine.vault.load().unwrap();
+    assert!(persisted.accounts.is_empty());
+
+    let saved = rig.engine.execute("save", None).unwrap();
+
+    assert_eq!(saved.accounts.len(), 1);
+    assert_eq!(saved.accounts[0].id, id);
+    rig.check_alice();
 }
 #[test]
 fn expired_or_unreadable_session_never_replaces_current() {

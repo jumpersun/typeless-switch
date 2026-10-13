@@ -84,11 +84,17 @@ function Glyph() {
   // The trusted local SVG stays vector; CSS strips tile/shadow effects for this small mark.
   return <span className="app-icon" aria-hidden="true" dangerouslySetInnerHTML={{ __html: appIcon }} />;
 }
-type IconName = "plus" | "check" | "lock" | "trash" | "arrow" | "save";
+type IconName = "plus" | "check" | "lock" | "trash" | "arrow" | "save" | "user";
 function Icon({ name }: { name: IconName }) {
   const paths: Record<IconName, React.ReactNode> = {
     plus: <path d="M12 5v14M5 12h14" />,
     check: <path d="m5 12 4 4L19 6" />,
+    user: (
+      <>
+        <circle cx="12" cy="8" r="4" />
+        <path d="M5 21v-2a7 7 0 0 1 14 0v2" />
+      </>
+    ),
     lock: (
       <>
         <rect x="5" y="10" width="14" height="11" rx="3" />
@@ -189,11 +195,11 @@ function App() {
         setMessage(
           (
             {
-              save: "当前账号已保存。",
-              switch: "已切换，请在 Typeless 中确认可正常使用。",
-              remove: "已从本机账号库移除。",
-              finish_add: "账号已添加。",
-              restore: "已恢复原登录状态。",
+              save: "当前账号的本地会话已保存。",
+              switch: "已切换本地会话，请在 Typeless 中确认可正常使用。",
+              remove: "已移除保存记录，Typeless 当前登录不受影响。",
+              finish_add: "账号的本地会话已保存，请在 Typeless 中确认可正常使用。",
+              restore: "已恢复原登录文件，请在 Typeless 中确认状态。",
             } as Record<string, string>
           )[action] ?? "",
         );
@@ -233,7 +239,7 @@ function App() {
         </div>
         <nav aria-label={t("主导航")}>
           <a className="nav-item selected" href="#accounts-page" aria-current="page" aria-label={t("账号")}>
-            <Icon name="arrow" /><span>{t("账号")}</span>
+            <Icon name="user" /><span>{t("账号")}</span>
           </a>
         </nav>
         <div className="sidebar-bottom">
@@ -303,9 +309,9 @@ function App() {
         <section className="current" aria-labelledby="current-title">
           <div className="current-top">
             <span className="eyebrow" id="current-title">{t("当前账号")}</span>
-            <span className={`status ${state?.current && !state.current.expired ? "" : "muted"}`}>
+            <span className={`status${state?.current?.expired ? " expired" : ""}`}>
               <i />
-              {state?.current?.expired ? t("登录已过期") : state?.current ? t("已登录") : t("未登录")}
+              {state?.current?.expired ? t("本地会话已过期") : state?.current ? t("检测到本地会话") : busy === "load" ? t("正在读取…") : t("未检测到本地会话")}
             </span>
           </div>
           <div className="current-body">
@@ -318,11 +324,12 @@ function App() {
               <p>
                 {state?.current?.expired ? t("请在 Typeless 中重新登录后更新会话。") : state?.current
                   ? currentSaved
-                    ? t("登录状态已加密保存在此设备")
+                    ? t("本地会话已加密保存在此设备")
                     : t("保存后，下次可以直接切换回来")
                   : (state?.notice ? t(state.notice) :
                     t("打开 Typeless 并完成登录，再保存到这里。"))}
               </p>
+              {state?.current && <p>{t("仅检测本地登录文件；是否可用请在 Typeless 中确认。")}</p>}
             </div>
           </div>
           <div className="current-actions">
@@ -334,26 +341,36 @@ function App() {
             {busy === "save"
               ? t("正在保存…")
               : currentSaved
-                ? t("更新登录状态")
+                ? t("更新保存的会话")
                 : t("保存当前账号")}
             <Icon name={currentSaved ? "check" : "save"} />
           </button>
+          {currentSaved && state?.current && (
+            <button
+              className="current-remove"
+              disabled={locked}
+              onClick={() => { if (state.current) setDialog({ type: "remove", account: state.current }); }}
+            >
+              <Icon name="trash" />{t("移除保存记录")}
+            </button>
+          )}
           </div>
         </section>
         <p className="switch-hint">{t("切换会重启 Typeless，请先结束录音。")}</p>
         <section className="accounts" aria-labelledby="accounts-title">
           <div className="section-top">
-            <h2 id="accounts-title">{t("其他账号")}<span>{state?.accounts.filter(a => a.id !== state.current?.id).length ?? 0}</span>
+            <h2 id="accounts-title">{t("所有账号")}<span>{state?.accounts.length ?? 0}</span>
             </h2>
           </div>
-          {!state?.accounts.some(a => a.id !== state.current?.id) ? (
+          {!state?.accounts.length ? (
             <div className="empty">
-              <h3>{state?.current ? t("还没有其他账号") : t("账号都放在这里")}</h3>
-              <p>{state?.current ? t("添加另一个账号后，就能在这里切换。") : t("先保存当前账号，再添加另一个。")}</p>
+              <h3>{t("还没有保存的账号")}</h3>
+              <p>{state?.current ? t("保存当前账号后，就会显示在这里。") : t("先保存当前账号，再添加另一个。")}</p>
             </div>
           ) : (
             <ul>
-              {state.accounts.filter(account => account.id !== state.current?.id).map((account) => {
+              {state.accounts.map((account) => {
+                const isCurrent = account.id === state.current?.id;
                 return (
                   <li key={account.id} className="account-row">
                     <Avatar email={account.email} />
@@ -365,14 +382,20 @@ function App() {
                           : t("保存在此设备")}
                       </p>
                     </div>
-                    <button
-                      className="switch"
-                      disabled={locked || account.expired}
-                      onClick={() => void run("switch", account.id)}
-                    >
-                      {t("切换")}
-                      <Icon name="arrow" />
-                    </button>
+                    {isCurrent ? (
+                      <span className="current-account-label">
+                        <Icon name="check" />{t("当前账号")}
+                      </span>
+                    ) : (
+                      <button
+                        className="switch"
+                        disabled={locked || account.expired}
+                        onClick={() => void run("switch", account.id)}
+                      >
+                        {t("切换")}
+                        <Icon name="arrow" />
+                      </button>
+                    )}
                     <button
                       className="remove icon-button"
                       disabled={locked}
@@ -401,7 +424,7 @@ function App() {
           <div className="busy" role="status">
             <span className="spinner" />
             {busy === "switch"
-              ? t("正在切换并等待 Typeless 确认…")
+              ? t("正在切换并检查本地账号文件…")
               : busy === "add"
                 ? t("正在打开 Typeless 登录窗口…")
                 : busy === "restore"
@@ -423,7 +446,7 @@ function App() {
         <p>
           {dialog?.type === "add"
             ? t("使用你已有的邮箱，在 Typeless 官方窗口完成注册或登录。")
-            : t("将从本机账号库移除 {0}，不会注销 Typeless 当前账号。", [dialog?.account?.email ?? ""])}
+            : t("将从本机账号库移除 {0} 的保存记录，不会退出 Typeless 当前账号。", [dialog?.account?.email ?? ""])}
         </p>
         {dialog?.type === "add" && (
           <>
